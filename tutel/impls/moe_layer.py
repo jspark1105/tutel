@@ -9,6 +9,7 @@ import torch.distributed as dist
 from torch.nn import ModuleList
 import torch.nn.functional as F
 
+from ..impls.ms_nccl import ms_all2all
 from ..impls.fast_dispatch import fast_dispatcher
 from ..jit_kernels.gating import fast_cumsum_sub_one
 
@@ -36,16 +37,19 @@ class AllToAll(torch.autograd.Function):
     def forward(ctx: Any, group: dist.ProcessGroup, input: Tensor):
         ctx.group = group
         ctx.world_size = get_world_size(group)
-        if ctx.world_size <= 1 or AllToAll.skip_a2a:
+        if ctx.world_size <= 1 or AllToAll.a2a_type == 0:
             return input
         input = input.contiguous()
+        if AllToAll.a2a_type == 2:
+            output = ms_all2all(input, group=group)
+            return output
         output = torch.empty_like(input)
         dist.all_to_all_single(output, input, group=group)
         return output
 
     @staticmethod
     def backward(ctx: Any, grad_output: Tensor):
-        if ctx.world_size <= 1 or AllToAll.skip_a2a:
+        if ctx.world_size <= 1 or AllToAll.a2a_type == 0:
             return (None, grad_output)
         return (None, AllToAll.apply(ctx.group, grad_output))
 
@@ -179,7 +183,8 @@ class MOELayer(torch.nn.Module):
 
         import os
         self.skip_moe = (int(os.environ.get('SKIP_MOE', '0')) != 0)
-        AllToAll.skip_a2a = (int(os.environ.get('SKIP_A2A', '0')) != 0)
+        # A2A_TYPE: 0 for skip All2All, 1 for standard Pytorch All2All, 2 for Microsoft Optimized All2All
+        AllToAll.a2a_type = int(os.environ.get('A2A_TYPE', '1'))
 
         if not isinstance(experts, dict):
             self.experts = cast(ModuleList, experts) if type(experts) == ModuleList else ModuleList(experts)

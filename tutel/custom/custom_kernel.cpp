@@ -3,6 +3,7 @@
 
 #include <torch/extension.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <c10d/ProcessGroupNCCL.hpp>
 
 #include <vector>
 
@@ -179,6 +180,14 @@ static void invoke_with_source(const std::vector<torch::Tensor> &ts, int code_id
   return invoke(ts, code_id);
 }
 
+static void ms_all2all(const std::vector<torch::Tensor> &ts, const c10d::ProcessGroupNCCL& group) {
+  LOG(WARNING) << "Microsoft NCCL AllToAll is unimplemented in this version, rank = " << group.getRank();
+
+  CHECK_EQ(0, cudaStreamSynchronize(nullptr));
+  // TODO: ..
+  CHECK_EQ(0, cudaStreamSynchronize(nullptr));
+}
+
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("invoke",
         &invoke,
@@ -187,5 +196,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("invoke_with_source",
         &invoke_with_source,
         "Generic Invoke with Source (CUDA)"
+    );
+    m.def("ms_all2all",
+        &ms_all2all,
+        "Microsoft Optimized AllToAll (CUDA)"
     );
 }

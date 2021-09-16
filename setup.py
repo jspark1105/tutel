@@ -64,7 +64,8 @@ setup(
             './tutel/custom/custom_kernel.cpp',
         ],
         library_dirs=['/usr/local/cuda/lib64/stubs'],
-        libraries=['dl', 'cuda', 'nvrtc'] if not IS_HIP_EXTENSION else [])
+        libraries=['dl', 'cuda', 'nvrtc'] if not IS_HIP_EXTENSION else [],
+        extra_compile_args={'cxx': ['-Wno-sign-compare']})
     ],
     cmdclass={
         'build_ext': BuildExtension
